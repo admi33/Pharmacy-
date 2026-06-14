@@ -1,0 +1,546 @@
+import { useState, useEffect, useMemo } from "react";
+
+const ADMIN_PASSWORD = "admin1234";
+
+const INITIAL_PRODUCTS = [
+  { id: 1, name: "Paracetamol 500mg", category: "Analgesic", price: 5, stock: 200, unit: "tablet" },
+  { id: 2, name: "Amoxicillin 250mg", category: "Antibiotic", price: 18, stock: 80, unit: "capsule" },
+  { id: 3, name: "Ibuprofen 400mg", category: "Analgesic", price: 8, stock: 150, unit: "tablet" },
+  { id: 4, name: "Cetirizine 10mg", category: "Antihistamine", price: 5, stock: 120, unit: "tablet" },
+  { id: 5, name: "Omeprazole 20mg", category: "Antacid", price: 14, stock: 90, unit: "capsule" },
+  { id: 6, name: "Metformin 500mg", category: "Antidiabetic", price: 10, stock: 60, unit: "tablet" },
+  { id: 7, name: "Vitamin C 1000mg", category: "Supplement", price: 7, stock: 300, unit: "tablet" },
+  { id: 8, name: "Loratadine 10mg", category: "Antihistamine", price: 6, stock: 100, unit: "tablet" },
+];
+
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+function fmt(n) {
+  return `GH₵${Number(n).toLocaleString("en-GH", { minimumFractionDigits: 2 })}`;
+}
+function today() { return new Date().toISOString().split("T")[0]; }
+function dateLabel(d) {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" });
+}
+
+const C = {
+  navy: "#1B4F72",
+  navyDark: "#154060",
+  navyLight: "#2E86C1",
+  bg: "#F0F4F8",
+  white: "#fff",
+  border: "#E0E8EF",
+  muted: "#6B8CAE",
+  text: "#1B2D3E",
+  red: "#E74C3C",
+  green: "#27AE60",
+  redBg: "#FFF0EE",
+  greenBg: "#EFF9F0",
+};
+
+export default function App() {
+  const [view, setView] = useState("cashier");
+  const [products, setProducts] = useState(() => load("ds_products", INITIAL_PRODUCTS));
+  const [sales, setSales] = useState(() => load("ds_sales", []));
+
+  // cashier
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [receipt, setReceipt] = useState(null);
+
+  // admin
+  const [pw, setPw] = useState("");
+  const [pwErr, setPwErr] = useState(false);
+  const [adminTab, setAdminTab] = useState("overview");
+  const [newProduct, setNewProduct] = useState({ name: "", category: "", price: "", stock: "", unit: "tablet" });
+  const [editStock, setEditStock] = useState({});
+  const [addProductOpen, setAddProductOpen] = useState(false);
+
+  useEffect(() => { save("ds_products", products); }, [products]);
+  useEffect(() => { save("ds_sales", sales); }, [sales]);
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.category.toLowerCase().includes(search.toLowerCase())
+  );
+
+  function addToCart(product) {
+    setCart(c => {
+      const exists = c.find(i => i.id === product.id);
+      if (exists) return c.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...c, { ...product, qty: 1 }];
+    });
+  }
+
+  function updateCartQty(id, qty) {
+    if (qty < 1) return removeFromCart(id);
+    setCart(c => c.map(i => i.id === id ? { ...i, qty } : i));
+  }
+
+  function removeFromCart(id) { setCart(c => c.filter(i => i.id !== id)); }
+
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+  function completeSale() {
+    if (!cart.length) return;
+    const insufficient = cart.find(i => {
+      const p = products.find(p => p.id === i.id);
+      return p && p.stock < i.qty;
+    });
+    if (insufficient) { alert(`Insufficient stock for ${insufficient.name}`); return; }
+
+    const sale = {
+      id: `RX${Date.now()}`,
+      date: today(),
+      time: new Date().toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" }),
+      customer: customerName || "Walk-in",
+      items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, price: i.price, subtotal: i.price * i.qty })),
+      total: cartTotal,
+    };
+
+    setSales(s => [sale, ...s]);
+    setProducts(ps => ps.map(p => {
+      const item = cart.find(i => i.id === p.id);
+      return item ? { ...p, stock: p.stock - item.qty } : p;
+    }));
+    setReceipt(sale);
+    setCart([]);
+    setCustomerName("");
+    setSearch("");
+    setShowCart(false);
+  }
+
+  function loginAdmin() {
+    if (pw === ADMIN_PASSWORD) { setView("admin"); setPwErr(false); setPw(""); }
+    else { setPwErr(true); }
+  }
+
+  const todaySales = sales.filter(s => s.date === today());
+  const todayRevenue = todaySales.reduce((s, t) => s + t.total, 0);
+
+  const revenueByDay = useMemo(() => {
+    const map = {};
+    sales.forEach(s => { map[s.date] = (map[s.date] || 0) + s.total; });
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).slice(-7);
+  }, [sales]);
+
+  const maxRev = Math.max(...revenueByDay.map(r => r[1]), 1);
+  const lowStock = products.filter(p => p.stock <= 30);
+
+  function updateStock(id) {
+    const val = parseInt(editStock[id]);
+    if (isNaN(val) || val < 0) return;
+    setProducts(ps => ps.map(p => p.id === id ? { ...p, stock: val } : p));
+    setEditStock(e => { const n = { ...e }; delete n[id]; return n; });
+  }
+
+  function addProduct() {
+    if (!newProduct.name || !newProduct.price || !newProduct.stock) return;
+    setProducts(ps => [...ps, {
+      id: Date.now(),
+      name: newProduct.name,
+      category: newProduct.category || "General",
+      price: parseFloat(newProduct.price),
+      stock: parseInt(newProduct.stock),
+      unit: newProduct.unit,
+    }]);
+    setNewProduct({ name: "", category: "", price: "", stock: "", unit: "tablet" });
+    setAddProductOpen(false);
+  }
+
+  const inputStyle = {
+    width: "100%", padding: "11px 14px", borderRadius: 10,
+    border: `1.5px solid ${C.border}`, fontSize: 15, outline: "none",
+    boxSizing: "border-box", background: C.white, color: C.text,
+  };
+  const btnPrimary = {
+    background: C.navy, color: C.white, border: "none",
+    borderRadius: 12, fontWeight: 700, cursor: "pointer",
+    fontSize: 15, padding: "13px 20px",
+  };
+
+  // ========== CASHIER ==========
+  if (view === "cashier") return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', system-ui, sans-serif", paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ background: C.navy, color: C.white, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 2px 10px rgba(0,0,0,0.2)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 22 }}>💊</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>PharmTrack</div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>Sales Terminal</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => setView("adminLogin")} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: C.white, padding: "7px 13px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            🔐 Admin
+          </button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: "14px 16px 8px" }}>
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search drug or category…"
+            style={{ ...inputStyle, paddingLeft: 40, fontSize: 14 }} />
+        </div>
+      </div>
+
+      {/* Customer name */}
+      <div style={{ padding: "0 16px 10px" }}>
+        <input value={customerName} onChange={e => setCustomerName(e.target.value)}
+          placeholder="Customer name (optional)"
+          style={{ ...inputStyle, fontSize: 14 }} />
+      </div>
+
+      {/* Products grid */}
+      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+        {filtered.map(p => {
+          const inCart = cart.find(i => i.id === p.id);
+          return (
+            <div key={p.id} onClick={() => p.stock > 0 && addToCart(p)}
+              style={{
+                background: C.white, borderRadius: 14, padding: "14px 12px",
+                cursor: p.stock > 0 ? "pointer" : "not-allowed",
+                border: inCart ? `2px solid ${C.navy}` : `1.5px solid ${C.border}`,
+                opacity: p.stock === 0 ? 0.5 : 1,
+                boxShadow: inCart ? "0 2px 10px rgba(27,79,114,0.15)" : "0 1px 4px rgba(0,0,0,0.05)",
+                position: "relative",
+              }}>
+              {inCart && (
+                <div style={{ position: "absolute", top: 8, right: 8, background: C.navy, color: C.white, borderRadius: 20, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>
+                  {inCart.qty}
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{p.category}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 8, lineHeight: 1.3, minHeight: 32 }}>{p.name}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: C.navy, fontWeight: 800, fontSize: 14 }}>{fmt(p.price)}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: p.stock <= 30 ? C.redBg : C.greenBg, color: p.stock <= 30 ? C.red : C.green }}>
+                  {p.stock > 0 ? `${p.stock}` : "Out"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Floating Cart Button */}
+      {cart.length > 0 && (
+        <div style={{ position: "fixed", bottom: 16, left: 16, right: 16, zIndex: 60 }}>
+          <button onClick={() => setShowCart(true)}
+            style={{ ...btnPrimary, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 8px 30px rgba(27,79,114,0.4)" }}>
+            <span>🛒 {cart.length} item{cart.length > 1 ? "s" : ""}</span>
+            <span>{fmt(cartTotal)}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Cart Drawer */}
+      {showCart && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 80 }}>
+          <div onClick={() => setShowCart(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: C.white, borderRadius: "20px 20px 0 0", padding: "20px 16px 32px", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, margin: "0 auto 16px" }} />
+            <div style={{ fontWeight: 800, fontSize: 17, color: C.text, marginBottom: 14 }}>🛒 Cart</div>
+
+            {cart.map(item => (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>{item.name}</div>
+                  <div style={{ color: C.navy, fontWeight: 700, fontSize: 13, marginTop: 2 }}>{fmt(item.price)} each</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => updateCartQty(item.id, item.qty - 1)} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                  <span style={{ minWidth: 20, textAlign: "center", fontWeight: 800, fontSize: 15 }}>{item.qty}</span>
+                  <button onClick={() => updateCartQty(item.id, item.qty + 1)} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, cursor: "pointer", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                </div>
+                <div style={{ minWidth: 60, textAlign: "right", fontWeight: 800, color: C.navy }}>{fmt(item.price * item.qty)}</div>
+                <button onClick={() => removeFromCart(item.id)} style={{ color: C.red, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "0 4px" }}>✕</button>
+              </div>
+            ))}
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, color: C.text, margin: "16px 0" }}>
+              <span>Total</span><span style={{ color: C.navy }}>{fmt(cartTotal)}</span>
+            </div>
+            <button onClick={completeSale} style={{ ...btnPrimary, width: "100%", fontSize: 16 }}>
+              ✅ Complete Sale
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {receipt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: C.white, borderRadius: "20px 20px 0 0", padding: "28px 20px 36px", width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 48 }}>✅</div>
+              <div style={{ fontWeight: 800, fontSize: 20, color: C.text, marginTop: 8 }}>Sale Complete!</div>
+              <div style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>Receipt #{receipt.id}</div>
+            </div>
+            <div style={{ background: C.bg, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}>
+                <span style={{ color: C.muted }}>Customer</span>
+                <span style={{ fontWeight: 700, color: C.text }}>{receipt.customer}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                <span style={{ color: C.muted }}>Time</span>
+                <span style={{ fontWeight: 700, color: C.text }}>{receipt.time}</span>
+              </div>
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10 }}>
+                {receipt.items.map(i => (
+                  <div key={i.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "4px 0" }}>
+                    <span style={{ color: C.text }}>{i.name} × {i.qty}</span>
+                    <span style={{ fontWeight: 700, color: C.navy }}>{fmt(i.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 20, color: C.navy, marginBottom: 20 }}>
+              <span>Total</span><span>{fmt(receipt.total)}</span>
+            </div>
+            <button onClick={() => setReceipt(null)} style={{ ...btnPrimary, width: "100%", fontSize: 16 }}>
+              New Sale
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ========== ADMIN LOGIN ==========
+  if (view === "adminLogin") return (
+    <div style={{ minHeight: "100vh", background: C.navy, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20 }}>
+      <div style={{ background: C.white, borderRadius: 20, padding: "36px 24px", width: "100%", maxWidth: 380, boxShadow: "0 30px 80px rgba(0,0,0,0.3)" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 48 }}>🔐</div>
+          <div style={{ fontWeight: 800, fontSize: 22, color: C.text, marginTop: 10 }}>Admin Access</div>
+          <div style={{ color: C.muted, fontSize: 14, marginTop: 4 }}>Enter password to continue</div>
+        </div>
+        <input type="password" value={pw} onChange={e => { setPw(e.target.value); setPwErr(false); }}
+          onKeyDown={e => e.key === "Enter" && loginAdmin()}
+          placeholder="Password"
+          style={{ ...inputStyle, border: `1.5px solid ${pwErr ? C.red : C.border}`, marginBottom: 6, fontSize: 16 }} />
+        {pwErr && <div style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>❌ Incorrect password</div>}
+        <button onClick={loginAdmin} style={{ ...btnPrimary, width: "100%", marginTop: 10, fontSize: 16 }}>Login</button>
+        <button onClick={() => setView("cashier")} style={{ width: "100%", padding: 12, background: "none", color: C.muted, border: "none", cursor: "pointer", fontSize: 14, marginTop: 8 }}>
+          ← Back to Sales
+        </button>
+      </div>
+    </div>
+  );
+
+  // ========== ADMIN DASHBOARD ==========
+  const tabs = [
+    { key: "overview", label: "📊", full: "Overview" },
+    { key: "inventory", label: "📦", full: "Stock" },
+    { key: "sales", label: "🧾", full: "Sales" },
+    { key: "products", label: "🏷️", full: "Products" },
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* Admin Header */}
+      <div style={{ background: C.navy, color: C.white, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 20 }}>💊</span>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>Admin Dashboard</div>
+        </div>
+        <button onClick={() => setView("cashier")} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: C.white, padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+          ← Sales
+        </button>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{ background: C.white, borderBottom: `1.5px solid ${C.border}`, display: "flex" }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setAdminTab(t.key)}
+            style={{ flex: 1, padding: "12px 4px", background: "none", border: "none", borderBottom: adminTab === t.key ? `3px solid ${C.navy}` : "3px solid transparent", color: adminTab === t.key ? C.navy : C.muted, fontWeight: adminTab === t.key ? 700 : 500, cursor: "pointer", fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <span style={{ fontSize: 18 }}>{t.label}</span>
+            <span>{t.full}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: 16 }}>
+
+        {/* OVERVIEW */}
+        {adminTab === "overview" && (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              {[
+                { label: "Today's Revenue", value: fmt(todayRevenue), icon: "💰", color: C.navy },
+                { label: "Sales Today", value: todaySales.length, icon: "🧾", color: C.navyLight },
+                { label: "Low Stock", value: lowStock.length, icon: "⚠️", color: lowStock.length > 0 ? C.red : C.green },
+                { label: "Products", value: products.length, icon: "💊", color: "#8E44AD" },
+              ].map(k => (
+                <div key={k.label} style={{ background: C.white, borderRadius: 14, padding: "16px 14px", borderLeft: `4px solid ${k.color}`, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{k.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 20, color: k.color }}>{k.value}</div>
+                  <div style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>{k.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Revenue Chart */}
+            <div style={{ background: C.white, borderRadius: 14, padding: "16px", marginBottom: 16, boxShadow: "0 1px 5px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 14 }}>📈 Last 7 Days Revenue</div>
+              {revenueByDay.length === 0 ? (
+                <div style={{ textAlign: "center", color: C.muted, padding: 24, fontSize: 14 }}>No sales yet</div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
+                  {revenueByDay.map(([date, rev]) => (
+                    <div key={date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontSize: 9, color: C.navy, fontWeight: 700, textAlign: "center" }}>
+                        {fmt(rev).replace("GH₵", "")}
+                      </div>
+                      <div style={{ width: "100%", background: date === today() ? C.navy : "#A8C8E0", borderRadius: "5px 5px 0 0", height: `${Math.max((rev / maxRev) * 90, 4)}px` }} />
+                      <div style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{dateLabel(date).split(",")[0]}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {lowStock.length > 0 && (
+              <div style={{ background: "#FFF8F8", border: `1.5px solid #FADADD`, borderRadius: 14, padding: "14px 16px" }}>
+                <div style={{ fontWeight: 700, color: C.red, marginBottom: 10, fontSize: 14 }}>⚠️ Low Stock Alert</div>
+                {lowStock.map(p => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #FADADD", fontSize: 14 }}>
+                    <span style={{ fontWeight: 600, color: C.text }}>{p.name}</span>
+                    <span style={{ color: C.red, fontWeight: 700 }}>{p.stock} left</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* INVENTORY */}
+        {adminTab === "inventory" && (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: C.text, marginBottom: 12 }}>📦 Inventory & Restocking</div>
+            {products.map(p => (
+              <div key={p.id} style={{ background: C.white, borderRadius: 14, padding: "14px 16px", marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", border: `1.5px solid ${C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{p.name}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{p.category} · {fmt(p.price)}</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: p.stock === 0 ? "#FADADD" : p.stock <= 30 ? "#FFF3CD" : "#D5F5E3", color: p.stock === 0 ? C.red : p.stock <= 30 ? "#856404" : "#1A6B3A" }}>
+                    {p.stock === 0 ? "Out" : p.stock <= 30 ? "Low" : "OK"} · {p.stock} {p.unit}s
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="number" min="0" placeholder="New stock qty"
+                    value={editStock[p.id] ?? ""}
+                    onChange={e => setEditStock(s => ({ ...s, [p.id]: e.target.value }))}
+                    style={{ ...inputStyle, flex: 1, fontSize: 14, padding: "9px 12px" }} />
+                  <button onClick={() => updateStock(p.id)}
+                    style={{ ...btnPrimary, padding: "9px 18px", fontSize: 14, borderRadius: 10 }}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SALES */}
+        {adminTab === "sales" && (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: C.text, marginBottom: 12 }}>🧾 Sales History</div>
+            {sales.length === 0 ? (
+              <div style={{ textAlign: "center", color: C.muted, padding: 40, fontSize: 14 }}>No sales recorded yet</div>
+            ) : sales.map(s => (
+              <div key={s.id} style={{ background: C.white, borderRadius: 14, padding: "14px 16px", marginBottom: 10, boxShadow: "0 1px 5px rgba(0,0,0,0.06)", border: `1.5px solid ${C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{s.customer}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{dateLabel(s.date)} · {s.time}</div>
+                  </div>
+                  <span style={{ fontWeight: 800, color: C.navy, fontSize: 15 }}>{fmt(s.total)}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {s.items.map(i => (
+                    <span key={i.id} style={{ background: "#EEF5FB", color: C.navy, fontSize: 11, padding: "3px 9px", borderRadius: 20, fontWeight: 600 }}>
+                      {i.name} ×{i.qty}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* PRODUCTS */}
+        {adminTab === "products" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>🏷️ Products</div>
+              <button onClick={() => setAddProductOpen(true)} style={{ ...btnPrimary, padding: "9px 16px", fontSize: 14, borderRadius: 10 }}>
+                + Add
+              </button>
+            </div>
+            {products.map(p => (
+              <div key={p.id} style={{ background: C.white, borderRadius: 14, padding: "14px 16px", marginBottom: 10, border: `1.5px solid ${C.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{p.category}</div>
+                  <div style={{ fontWeight: 700, color: C.text, fontSize: 14, marginTop: 2 }}>{p.name}</div>
+                  <div style={{ color: C.navy, fontWeight: 800, fontSize: 13, marginTop: 3 }}>{fmt(p.price)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, color: p.stock <= 30 ? C.red : C.green, fontWeight: 700 }}>{p.stock} {p.unit}s</div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Product Modal */}
+            {addProductOpen && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
+                <div style={{ background: C.white, borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+                  <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, margin: "0 auto 18px" }} />
+                  <div style={{ fontWeight: 800, fontSize: 18, color: C.text, marginBottom: 18 }}>Add New Product</div>
+                  {[
+                    { key: "name", label: "Drug Name", placeholder: "e.g. Aspirin 100mg" },
+                    { key: "category", label: "Category", placeholder: "e.g. Analgesic" },
+                    { key: "price", label: "Price (GH₵)", placeholder: "e.g. 10", type: "number" },
+                    { key: "stock", label: "Initial Stock", placeholder: "e.g. 100", type: "number" },
+                  ].map(f => (
+                    <div key={f.key} style={{ marginBottom: 14 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: C.muted, display: "block", marginBottom: 5 }}>{f.label}</label>
+                      <input type={f.type || "text"} value={newProduct[f.key]}
+                        onChange={e => setNewProduct(p => ({ ...p, [f.key]: e.target.value }))}
+                        placeholder={f.placeholder} style={inputStyle} />
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.muted, display: "block", marginBottom: 5 }}>Unit</label>
+                    <select value={newProduct.unit} onChange={e => setNewProduct(p => ({ ...p, unit: e.target.value }))}
+                      style={{ ...inputStyle }}>
+                      {["tablet", "capsule", "bottle", "sachet", "tube", "vial", "piece"].map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setAddProductOpen(false)} style={{ flex: 1, padding: 13, background: C.bg, border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 600, color: C.muted, fontSize: 15 }}>Cancel</button>
+                    <button onClick={addProduct} style={{ ...btnPrimary, flex: 1 }}>Add Product</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
