@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmaLocal Pro - Complete Architecture Spec</title>
+    <style>
+        :root {
+            --bg-primary: #121214;
+            --bg-secondary: #1a1a1e;
+            --bg-tertiary: #26262b;
+            --accent: #00b4d8;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border: #374151;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+
+        header {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .container {
+            display: flex;
+            max-width: 1600px;
+            margin: 0 auto;
+            height: calc(100vh - 60px);
+        }
+
+        nav {
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem 1rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-tertiary);
+            color: var(--accent);
+        }
+
+        .nav-group-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin: 1rem 0 0.5rem 1rem;
+            font-weight: bold;
+        }
+
+        main {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            box-sizing: border-box;
+            background-color: var(--bg-primary);
+        }
+
+        .view-panel {
+            display: none;
+        }
+
+        .view-panel.active {
+            display: block;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .code-container {
+            position: relative;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            background-color: var(--bg-tertiary);
+            padding: 0.5rem 1rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .copy-btn {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: "Fira Code", Consolas, Monaco, monospace;
+            font-size: 0.85rem;
+            color: #e2e8f0;
+        }
+
+        /* Syntax Highlighting Utilities */
+        .keyword { color: #f43f5e; font-weight: bold; }
+        .type { color: #60a5fa; }
+        .string { color: #34d399; }
+        .annotation { color: #a78bfa; }
+        .comment { color: #6b7280; font-style: italic; }
+        .number { color: #fb923c; }
+
+        .architecture-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+
+        .card ul {
+            padding-left: 1.2rem;
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .card li {
+            margin-bottom: 0.4rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📦 PharmaLocal Pro <span>// Production Offline Core</span></h1>
+        <span class="badge">Architecture: Local-First Jetpack Compose / Room SQLite</span>
+    </header>
+
+    <div class="container">
+        <nav>
+            <div class="nav-group-title">Configuration</div>
+            <div class="nav-item active" onclick="switchView('manifest')">🚀 Build & Manifest</div>
+            
+            <div class="nav-group-title">Database Engine</div>
+            <div class="nav-item" onclick="switchView('entities')">📊 Database Schema Entities</div>
+            <div class="nav-item" onclick="switchView('dao')">🛠️ Data Access Objects (DAO)</div>
+            <div class="nav-item" onclick="switchView('database')">💾 Room Initialization</div>
+            
+            <div class="nav-group-title">Core Business Logic</div>
+            <div class="nav-item" onclick="switchView('repository')">⚖️ Transaction Repository</div>
+            
+            <div class="nav-group-title">Hardware & Documents</div>
+            <div class="nav-item" onclick="switchView('hardware')">📷 Barcode & Camera Engine</div>
+            <div class="nav-item" onclick="switchView('documents')">📄 PDF & Excel Exporters</div>
+            <div class="nav-item" onclick="switchView('backup')">🛡️ Local Security Backup</div>
+            
+            <div class="nav-group-title">User Interface</div>
+            <div class="nav-item" onclick="switchView('ui-dashboard')">🖥️ Modern UI Dashboard</div>
+            <div class="nav-item" onclick="switchView('ui-sales')">🛒 Sales Execution UI</div>
+        </nav>
+
+        <main>
+            <!-- VIEW: MANIFEST & BUILD -->
+            <div id="manifest" class="view-panel active">
+                <h2>Build Configurations & Hardware Access permissions</h2>
+                <p>Add these configuration setups to your application initialization pipelines to guarantee modern sandboxed system permissions on execution scopes.</p>
+                
+                <div class="code-container">
+                    <div class="code-header"><span>app/build.gradle.kts</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+                    <pre><span class="keyword">plugins</span> {
+    id(<span class="string">"com.android.application"</span>)
+    id(<span class="string">"org.jetbrains.kotlin.android"</span>)
+    id(<span class="string">"kotlin-kapt"</span>)
+}
+
+<span class="keyword">dependencies</span> {
+    <span class="comment">// Core Database Architecture</span>
+    <span class="keyword">val</span> roomVersion = <span class="string">"2.6.1"</span>
+    implementation(<span class="string">"androidx.room:room-runtime:$roomVersion"</span>)
+    implementation(<span class="string">"androidx.room:room-ktx:$roomVersion"</span>)
+    kapt(<span class="string">"androidx.room:room-compiler:$roomVersion"</span>)
+
+    <span class="comment">// Asynchronous Core Flows</span>
+    implementation(<span class="string">"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"</span>)
+
+    <span class="comment">// Local Settings Engines</span>
+    implementation(<span class="string">"androidx.datastore:datastore-preferences:1.1.1"</span>)
+
+    <span class="comment">// Local Camera and Visual Decoding Frameworks</span>
+    implementation(<span class="string">"com.google.zxing:core:3.5.3"</span>)
+    implementation(<span class="string">"androidx.camera:camera-camera2:1.3.3"</span>)
+    implementation(<span class="string">"androidx.camera:camera-lifecycle:1.3.3"</span>)
+    implementation(<span class="string">"androidx.camera:camera-view:1.3.3"</span>)
+
+    <span class="comment">// Sandboxed Document Compilers</span>
+    implementation(<span class="string">"org.apache.poi:poi-ooxml:5.2.5"</span>)
+    implementation(<span class="string">"com.itextpdf:itext7-core:8.0.2"</span>)
+}</pre>
+                </div>
+
+                <div class="code-container">
+                    <div class="code-header"><span>app/src/main/AndroidManifest.xml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
