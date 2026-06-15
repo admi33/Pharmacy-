@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmaKeep - Android SQLite Management App</title>
+    <!-- Tailwind CSS for Modern Material 3 Look -->
+    <script src="https://tailwindcss.com"></script>
+    <!-- FontAwesome for Material Icons -->
+    <link rel="stylesheet" href="https://cloudflare.com">
+    <!-- ChartJS for Analytical Reports -->
+    <script src="https://jsdelivr.net"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#0284c7',
+                            dark: '#38bdf8',
+                            bgLight: '#f8fafc',
+                            bgDark: '#0f172a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://googleapis.com');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 h-full flex flex-col transition-colors duration-200">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="bg-white dark:bg-slate-800 shadow-sm border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-md shadow-sky-200 dark:shadow-none">
+                <i class="fa-solid fa-file-medical"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-tight flex items-center gap-1.5">
+                    PharmaKeep <span class="text-xs bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 font-medium px-1.5 py-0.5 rounded">v1.0-Room</span>
+                </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400" id="role-indicator">Role: Owner (Admin)</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <!-- User Role Dropdown Switcher -->
+            <select id="roleSelector" onchange="changeUserRole(this.value)" class="text-xs bg-slate-100 dark:bg-slate-700 border-none rounded-lg p-2 focus:ring-2 focus:ring-sky-500 font-semibold cursor-pointer">
+                <option value="Owner">👑 Owner</option>
+                <option value="Manager">💼 Manager</option>
+                <option value="Cashier">⚡ Cashier</option>
+            </select>
+            <!-- Dark Mode Toggle -->
+            <button onclick="toggleDarkMode()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300">
+                <i id="theme-icon" class="fa-solid fa-moon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN INTERACTIVE LAYOUT CONTAINER -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- SIDEBAR ARCHITECTURE NAVIGATOR (Left) -->
+        <aside class="w-72 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col hidden lg:flex">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700/50">
+                <span class="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase">Android Source & Engine</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                <button onclick="switchTab('dashboard')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-semibold transition-all bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400" data-target="dashboard">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-chart-pie w-5"></i><span>Live Dashboard</span></span>
+                    <span class="text-xs font-bold bg-sky-200/60 dark:bg-sky-900 px-2 py-0.5 rounded-full" id="badge-total-meds">0</span>
+                </button>
+                <button onclick="switchTab('inventory')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all" data-target="inventory">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-pills w-5"></i><span>Medicine Stock</span></span>
+                </button>
+                <button onclick="switchTab('sales')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all" data-target="sales">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-cart-shopping w-5"></i><span>Sales Counter POS</span></span>
+                </button>
+                <button onclick="switchTab('purchases')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all" data-target="purchases">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-truck-loading w-5"></i><span>Stock Purchases</span></span>
+                </button>
+                <button onclick="switchTab('suppliers-customers')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all" data-target="suppliers-customers">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-address-book w-5"></i><span>Contacts Directory</span></span>
+                </button>
+                <button onclick="switchTab('kotlin-room')" class="nav-btn w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all" data-target="kotlin-room">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-code w-5"></i><span>Kotlin Room Blueprint</span></span>
+                </button>
+            </div>
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                <div class="flex items-center justify-between text-xs font-semibold mb-2 text-slate-500">
+                    <span>SQLite Storage Size</span>
+                    <span class="text-emerald-600">Local Only</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: 15%"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- LIVE SCREEN CONTENT MAIN PANEL (Center/Right) -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+
+            <!-- TAB 1: REALTIME RUNNING DASHBOARD -->
+            <div id="tab-dashboard" class="tab-content space-y-6">
+                <!-- Top Key Metrics Row -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+                        <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Value (Cost)</p>
+                        <h3 class="text-2xl font-bold mt-1 text-slate-900 dark:text-white" id="metric-stock-value">GH₵0.00</h3>
+                        <div class="absolute right-3 bottom-3 text-2xl text-slate-200 dark:text-slate-700"><i class="fa-solid fa-vault"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+                        <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Today's Sales Revenue</p>
+                        <h3 class="text-2xl font-bold mt-1 text-emerald-600 dark:text-emerald-400" id="metric-daily-sales">GH₵0.00</h3>
+                        <div class="absolute right-3 bottom-3 text-2xl text-slate-200 dark:text-slate-700"><i class="fa-solid fa-basket-shopping"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+                        <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Net Profit Realized</p>
+                        <h3 class="text-2xl font-bold mt-1 text-sky-600 dark:text-sky-400" id="metric-daily-profit">GH₵0.00</h3>
+                        <div class="absolute right-3 bottom-3 text-2xl text-slate-200 dark:text-slate-700"><i class="fa-solid fa-chart-line"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+                        <p class="text-xs font-medium text-rose-500 uppercase tracking-wider">Alerts (Low / Expired)</p>
+                        <h3 class="text-2xl font-bold mt-1 text-rose-600" id="metric-alerts">0 / 0</h3>
