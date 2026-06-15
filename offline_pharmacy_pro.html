@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offline Pharmacy Pro</title>
+
+<style>
+body {font-family: Arial; margin:0; background:#f4f6f9;}
+header {background:#1e88e5; color:white; padding:15px; text-align:center;}
+
+.container {padding:10px;}
+.card {
+    background:white; padding:10px; margin-bottom:10px;
+    border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1);
+}
+
+input, select {
+    width:100%; padding:10px; margin:5px 0;
+    border:1px solid #ddd; border-radius:6px;
+}
+
+button {
+    width:100%; padding:10px;
+    background:#1e88e5; color:white;
+    border:none; border-radius:6px;
+}
+
+button:hover {background:#1565c0;}
+
+.flex {display:flex; justify-content:space-between; font-size:14px;}
+
+.low {color:red; font-weight:bold;}
+.expired {color:orange; font-weight:bold;}
+
+.hidden {display:none;}
+</style>
+</head>
+
+<body>
+
+<header>Offline Pharmacy Pro</header>
+
+<div id="loginBox" class="container">
+    <div class="card">
+        <h3>Enter PIN</h3>
+        <input id="pinInput" type="password" placeholder="Enter PIN">
+        <button onclick="checkPIN()">Login</button>
+    </div>
+</div>
+
+<div id="app" class="container hidden">
+
+<div class="card">
+    <h3>Dashboard</h3>
+    <div id="dashboard"></div>
+</div>
+
+<div class="card">
+    <input id="name" placeholder="Medicine name">
+    <input id="cost" type="number" placeholder="Cost price">
+    <input id="price" type="number" placeholder="Selling price">
+    <input id="stock" type="number" placeholder="Stock quantity">
+    <input id="expiry" type="date">
+    <input id="supplier" placeholder="Supplier name">
+    <button onclick="addItem()">Add Medicine</button>
+</div>
+
+<div class="card">
+    <h4>Restock</h4>
+    <input id="restockName" placeholder="Medicine name">
+    <input id="restockQty" type="number" placeholder="Quantity">
+    <button onclick="restock()">Restock</button>
+</div>
+
+<div class="card">
+    <input id="search" placeholder="Search..." onkeyup="render()">
+</div>
+
+<div id="list"></div>
+
+</div>
+
+<script>
+
+let PIN = "1234";
+let items = JSON.parse(localStorage.getItem("pharmacy")) || [];
+let sales = JSON.parse(localStorage.getItem("sales")) || [];
+
+function save(){
+    localStorage.setItem("pharmacy", JSON.stringify(items));
+    localStorage.setItem("sales", JSON.stringify(sales));
+}
+
+function checkPIN(){
+    let pin = document.getElementById("pinInput").value;
+    if(pin === PIN){
+        document.getElementById("loginBox").classList.add("hidden");
+        document.getElementById("app").classList.remove("hidden");
+        render();
+    } else {
+        alert("Wrong PIN");
+    }
+}
+
+function addItem(){
+    items.push({
+        name: name.value,
+        cost: Number(cost.value),
+        price: Number(price.value),
+        stock: Number(stock.value),
+        expiry: expiry.value,
+        supplier: supplier.value
+    });
+    save(); render();
+}
+
+function sell(i){
+    if(items[i].stock > 0){
+        items[i].stock -= 1;
+
+        let profit = items[i].price - items[i].cost;
+        sales.push({
+            name: items[i].name,
+            profit,
+            date: new Date().toDateString()
+        });
+
+        save(); render();
+    }
+}
+
+function restock(){
+    let name = restockName.value.toLowerCase();
+    let qty = Number(restockQty.value);
+
+    let item = items.find(i => i.name.toLowerCase() === name);
+    if(item){
+        item.stock += qty;
+        save(); render();
+    }
+}
+
+function isExpired(date){
+    if(!date) return false;
+    return new Date(date) < new Date();
+}
+
+function render(){
+
+    let searchVal = search.value?.toLowerCase() || "";
+
+    let list = document.getElementById("list");
+    list.innerHTML = "";
+
+    let totalProfit = sales.reduce((a,b)=>a+b.profit,0);
+    let todaySales = sales.filter(s => s.date === new Date().toDateString()).length;
+
+    dashboard.innerHTML = `
+        <p><b>Total Profit:</b> ${totalProfit}</p>
+        <p><b>Today's Sales:</b> ${todaySales}</p>
+        <p><b>Items:</b> ${items.length}</p>
+    `;
+
+    items
+    .filter(i => i.name.toLowerCase().includes(searchVal))
+    .forEach((item, index) => {
+
+        let profit = item.price - item.cost;
+        let expired = isExpired(item.expiry);
+
+        list.innerHTML += `
+        <div class="card">
+            <div class="flex">
+                <b>${item.name}</b>
+                <span class="${item.stock < 5 ? 'low' : ''}">
+                    Stock: ${item.stock}
+                </span>
+            </div>
+
+            <div class="flex">
+                <span>Cost: ${item.cost}</span>
+                <span>Sell: ${item.price}</span>
+                <span>Profit: ${profit}</span>
+            </div>
+
+            <div class="flex">
+                <span>${item.supplier || ''}</span>
+                <span class="${expired ? 'expired' : ''}">
+                    ${expired ? 'Expired' : item.expiry || ''}
+                </span>
+            </div>
+
+            <button onclick="sell(${index})">Sell 1</button>
+        </div>
+        `;
+    });
+}
+
+render();
+
+</script>
+
+</body>
+</html>
